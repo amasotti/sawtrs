@@ -1,5 +1,9 @@
 # Sawtrs
+
 [![CI](https://github.com/amasotti/sawtrs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/amasotti/sawtrs/actions/workflows/ci.yml)
+[![Built with Rust](https://img.shields.io/badge/Built_with-Rust-dea584?logo=rust&logoColor=white)](https://www.rust-lang.org)
+[![Whisper](https://img.shields.io/badge/Whisper-whisper.cpp-74aa9c?logo=openai&logoColor=white)](https://github.com/ggml-org/whisper.cpp)
+[![Ollama](https://img.shields.io/badge/Embeddings-Ollama-000000?logo=ollama&logoColor=white)](https://ollama.com)
 
 S2T (sawt as in arabic صوت, "voice") is a local CLI tool that downloads YouTube audio, transcribes it, stores transcript segments in a vector database,
 and allows semantic search and export.
