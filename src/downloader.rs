@@ -17,7 +17,7 @@ pub enum DownloadError {
 }
 
 /// Extract the video ID from a YouTube URL or bare ID.
-fn extract_video_id(url: &str) -> Result<String, DownloadError> {
+pub fn extract_video_id(url: &str) -> Result<String, DownloadError> {
     // Already a bare ID (no slashes, no dots)
     if !url.contains('/') && !url.contains('.') {
         return Ok(url.to_string());
@@ -33,13 +33,11 @@ fn extract_video_id(url: &str) -> Result<String, DownloadError> {
     }
 
     // youtu.be/<id> short links
-    if url.contains("youtu.be/") {
-        if let Some(pos) = url.find("youtu.be/") {
-            let id = &url[pos + 9..];
-            let id = id.split(['?', '&', '#']).next().unwrap_or(id);
-            if !id.is_empty() {
-                return Ok(id.to_string());
-            }
+    if let Some(pos) = url.find("youtu.be/") {
+        let id = &url[pos + 9..];
+        let id = id.split(['?', '&', '#']).next().unwrap_or(id);
+        if !id.is_empty() {
+            return Ok(id.to_string());
         }
     }
 
