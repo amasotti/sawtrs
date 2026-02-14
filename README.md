@@ -10,6 +10,7 @@ Both are small learning projects for me, to interact with embeddings and transcr
 
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — must be installed and available on `PATH`
 - [FFmpeg](https://ffmpeg.org) — must be installed and available on `PATH`
+- A [whisper.cpp ggml model](https://huggingface.co/ggerganov/whisper.cpp/tree/main) — place it in `models/` (defaults to `models/ggml-large-v3.bin`)
 
 ## Pipeline
 
