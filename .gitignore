@@ -1,3 +1,4 @@
 /target
 downloads/
 models/*.bin
+store_data/
