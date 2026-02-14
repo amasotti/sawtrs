@@ -80,12 +80,17 @@ pub fn download(url: &str, output_dir: &str) -> Result<PathBuf, DownloadError> {
     fs::create_dir_all(out_path)?;
 
     let output_template = out_path.join(format!("{video_id}.%(ext)s"));
+    let wav_path = out_path.join(format!("{video_id}.wav"));
 
+    // yt-dlp: download and convert to wav via ffmpeg postprocessor,
+    // forcing 16kHz mono (required by whisper.cpp)
     let output = Command::new("yt-dlp")
         .args([
             "--extract-audio",
             "--audio-format",
             "wav",
+            "--postprocessor-args",
+            "ffmpeg:-ar 16000 -ac 1",
             "--output",
         ])
         .arg(output_template.to_str().unwrap_or_default())
@@ -97,7 +102,6 @@ pub fn download(url: &str, output_dir: &str) -> Result<PathBuf, DownloadError> {
         return Err(DownloadError::YtDlpFailed(stderr.into_owned()));
     }
 
-    let wav_path = out_path.join(format!("{video_id}.wav"));
     if wav_path.exists() {
         Ok(wav_path)
     } else {
