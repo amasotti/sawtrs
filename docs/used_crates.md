@@ -24,8 +24,9 @@ where callers need to programmatically distinguish error cases. In sawtrs, `anyh
 annotate each variant with `#[error("...")]` to define its `Display` message, and use `#[from]` to auto-generate `From`
 impls for transparent error conversion. Unlike `anyhow`, `thiserror` produces typed, matchable errors — making it the
 right choice for library modules where callers need to handle specific failure modes. In sawtrs, each module (
-`downloader`, `transcriber`) defines its own error enum via `thiserror`, e.g. `DownloadError::YtDlpNotFound` or
-`TranscribeError::ModelNotFound`. This keeps error handling structured without writing manual `impl` blocks.
+`downloader`, `transcriber`, `store`, `export`) defines its own error enum via `thiserror`, e.g.
+`DownloadError::YtDlpNotFound`, `TranscribeError::ModelNotFound`, or `StoreError::OllamaUnavailable`. This keeps error
+handling structured without writing manual `impl` blocks.
 
 ## whisper-rs (v0.15)
 
@@ -57,5 +58,15 @@ produce 16kHz WAV.
 `comfy-table` renders formatted ASCII/Unicode tables in the terminal. You create a `Table`, set headers, add rows, and
 call `println!("{table}")` — it handles column widths, alignment, and border styles automatically. It auto-detects
 terminal width (via the `tty` feature) and wraps content to fit. In sawtrs, it's used to display transcription
-segments (index, start time, end time, text) and will be reused for search results and export previews. It's a
+segments (index, start time, end time, text) and is reused for search results and export previews. It's a
 lightweight alternative to `tabled` with a simpler API.
+
+## usearch (v2)
+
+`usearch` is a compact, single-file vector search engine implementing the HNSW ([Hierarchical Navigable Small World](https://en.wikipedia.org/wiki/Hierarchical_navigable_small_world))
+algorithm. It stores `(u64 key, vector)` pairs and supports approximate nearest-neighbor search with cosine, L2, and
+inner-product metrics. The Rust API is a thin wrapper over C++ via `cxx`. Key operations: `Index::new(&options)` to
+create, `add(key, &vector)` to insert, `search(&query, n)` to find neighbors (returns `Matches { keys, distances }`),
+`remove(key)` to delete, and `save`/`load` for persistence. It also supports `filtered_search` with a predicate
+closure — we use this for the `--video-id` filter in search. usearch stores only vectors and keys, not metadata, so we
+pair it with a sidecar `metadata.json` file that maps each `u64` key to its segment info (video ID, timestamps, text).

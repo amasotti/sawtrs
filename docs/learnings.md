@@ -88,3 +88,58 @@ These are **not interchangeable**. A CTranslate2 model won't load in whisper.cpp
 Model sizes range from `tiny` (~75 MB) to `large-v3` (~3 GB). The `large-v3-turbo` variant offers a good accuracy/speed
 tradeoff for local use. Larger models hallucinate more confidently when given bad input — a small model might output
 silence or short garbage, while a large model will write fluent paragraphs of invented text.
+
+## Embeddings and Vector Search
+
+### What Are Embeddings?
+
+An embedding is a fixed-length vector of floats (e.g. 768 dimensions) that represents the "meaning" of a piece of text
+in a high-dimensional space. Texts with similar meanings end up close together in this space. This is what makes
+semantic search possible — instead of matching keywords, you compare the geometric distance between meaning vectors.
+
+Embedding models are trained on massive text corpora to learn these representations. Different models produce different
+dimensionalities: `nomic-embed-text` outputs 768 dimensions, OpenAI's `text-embedding-3-small` outputs 1536. The
+dimensionality is fixed per model — every input, whether one word or a full paragraph, becomes a vector of exactly that
+length.
+
+### Ollama as an Embedding Server
+
+In Python, libraries like `sentence-transformers` or ChromaDB bundle embedding models directly. In Rust, the ecosystem
+for running transformer models locally is less mature. Rather than pulling in heavy ML dependencies (`rust-bert`,
+`candle`), sawtrs uses [Ollama](https://ollama.com) as a local sidecar: it runs the embedding model in a separate
+process and exposes a simple HTTP API (`POST /api/embed`). This keeps the Rust binary lean — it only needs an HTTP
+client (`reqwest`), not an ML runtime.
+
+The tradeoff is an external dependency: users must install Ollama and pull the model (`ollama pull nomic-embed-text`)
+before using store/search/pipeline commands. But Ollama is a single binary, runs on all platforms, and the model
+download is a one-time step.
+
+### HNSW: How Vector Search Works
+
+Brute-force nearest-neighbor search (comparing the query against every stored vector) is O(n) and too slow for large
+datasets. HNSW (Hierarchical Navigable Small World) is an approximate algorithm that builds a multi-layer graph where
+each node is a vector and edges connect nearby neighbors. Search starts at the top layer (sparse, long-range jumps) and
+descends to lower layers (dense, fine-grained) — similar to skip lists. This gives O(log n) search time with high
+recall (typically >95% of true nearest neighbors).
+
+Key HNSW parameters:
+- **connectivity** (`M`): max edges per node. Higher = more accurate but more memory. 16 is a common default.
+- **expansion_add** (`ef_construction`): beam width during insertion. Higher = better graph quality but slower inserts.
+- **expansion_search** (`ef`): beam width during search. Higher = more accurate but slower queries.
+
+### Cosine Similarity vs Distance
+
+Cosine similarity measures the angle between two vectors, ignoring magnitude: `cos(A, B) = dot(A, B) / (|A| * |B|)`.
+It ranges from -1 (opposite) to 1 (identical). Cosine **distance** is `1 - cosine_similarity`, so 0 means identical
+and 2 means opposite. usearch uses cosine distance internally — lower values in search results mean better matches.
+
+### The Two-File Approach
+
+usearch is a pure vector index: it stores `(u64 key, float[] vector)` pairs and nothing else. It has no concept of
+metadata (text, timestamps, video IDs). So we use a sidecar approach: the HNSW index lives in `index.usearch`, and a
+`metadata.json` file maps each `u64` key to its `StoredSegment` (video ID, segment index, start/end times, text). Both
+files must be kept in sync — every insert/delete updates both.
+
+The `u64` key is derived deterministically from the string `{video_id}_{segment_index}` via FNV-1a hashing. This makes
+re-ingestion idempotent: running the pipeline twice on the same video produces the same keys, so the second run is an
+upsert (remove old + insert new) rather than a duplicate.
