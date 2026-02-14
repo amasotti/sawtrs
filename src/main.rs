@@ -1,7 +1,13 @@
 mod downloader;
+#[allow(dead_code)]
+mod export;
+#[allow(dead_code)]
+mod store;
 mod transcriber;
 
 use clap::{Parser, Subcommand};
+
+const STORE_DIR: &str = "store_data";
 
 #[derive(Parser)]
 #[command(name = "sawt", about = "Download, transcribe, search and export YouTube audio")]
@@ -89,22 +95,127 @@ fn main() {
             }
         }
         Command::Search { query, n, video_id } => {
-            println!(
-                "search: not implemented (query={query}, n={n}, video_id={})",
-                video_id.as_deref().unwrap_or("all")
-            );
+            match store::VectorStore::open(STORE_DIR) {
+                Ok(vs) => match vs.search(&query, n, video_id.as_deref()) {
+                    Ok(results) if results.is_empty() => {
+                        println!("no results found");
+                    }
+                    Ok(results) => {
+                        let mut table = comfy_table::Table::new();
+                        table.set_header(["#", "Video", "Time", "Text", "Distance"]);
+                        for (i, r) in results.iter().enumerate() {
+                            table.add_row([
+                                (i + 1).to_string(),
+                                r.video_id.clone(),
+                                format!(
+                                    "{}-{}",
+                                    format_ts(r.start),
+                                    format_ts(r.end)
+                                ),
+                                r.text.clone(),
+                                format!("{:.4}", r.distance),
+                            ]);
+                        }
+                        println!("{table}");
+                        println!("{} result(s)", results.len());
+                    }
+                    Err(e) => eprintln!("error: {e}"),
+                },
+                Err(e) => eprintln!("error: {e}"),
+            }
         }
         Command::Export { video_id, output } => {
-            println!(
-                "export: not implemented (video_id={video_id}, output={})",
-                output.as_deref().unwrap_or("stdout")
-            );
+            match store::VectorStore::open(STORE_DIR) {
+                Ok(vs) => match vs.get_segments(&video_id) {
+                    Ok(segments) => {
+                        let export_segs: Vec<export::ExportSegment> = segments
+                            .iter()
+                            .map(|s| export::ExportSegment {
+                                index: s.index,
+                                start: s.start,
+                                end: s.end,
+                                text: s.text.clone(),
+                            })
+                            .collect();
+
+                        println!("{}", export::format_table(&video_id, &export_segs));
+                        println!("{} segment(s)", export_segs.len());
+
+                        if let Some(path) = output {
+                            match export::write_csv(&path, &export_segs) {
+                                Ok(()) => println!("written to {path}"),
+                                Err(e) => eprintln!("csv error: {e}"),
+                            }
+                        }
+                    }
+                    Err(e) => eprintln!("error: {e}"),
+                },
+                Err(e) => eprintln!("error: {e}"),
+            }
         }
         Command::Pipeline { url, language } => {
-            println!(
-                "pipeline: not implemented (url={url}, language={})",
-                language.as_deref().unwrap_or("auto")
-            );
+            // Step 1: Download
+            eprintln!("[1/3] downloading audio...");
+            let wav_path = match downloader::download(&url, "downloads") {
+                Ok(path) => {
+                    eprintln!("       saved to {}", path.display());
+                    path
+                }
+                Err(e) => {
+                    eprintln!("error: {e}");
+                    return;
+                }
+            };
+
+            // Step 2: Transcribe
+            eprintln!("[2/3] transcribing...");
+            let segments = match transcriber::transcribe(
+                wav_path.to_str().unwrap_or_default(),
+                language.as_deref(),
+                None,
+            ) {
+                Ok(segs) => {
+                    eprintln!("       {} segment(s)", segs.len());
+                    segs
+                }
+                Err(e) => {
+                    eprintln!("error: {e}");
+                    return;
+                }
+            };
+
+            // Step 3: Store
+            eprintln!("[3/3] storing in vector database...");
+            let video_id = match downloader::extract_video_id(&url) {
+                Ok(id) => id,
+                Err(e) => {
+                    eprintln!("error: {e}");
+                    return;
+                }
+            };
+
+            let store_segments: Vec<store::TranscriptSegment> = segments
+                .iter()
+                .map(|s| store::TranscriptSegment {
+                    start: s.start,
+                    end: s.end,
+                    text: s.text.clone(),
+                })
+                .collect();
+
+            match store::VectorStore::open(STORE_DIR) {
+                Ok(mut vs) => match vs.store_transcript(&video_id, &store_segments) {
+                    Ok(n) => eprintln!("       stored {n} segment(s) for {video_id}"),
+                    Err(e) => eprintln!("error: {e}"),
+                },
+                Err(e) => eprintln!("error: {e}"),
+            }
         }
     }
+}
+
+fn format_ts(seconds: f64) -> String {
+    let mins = (seconds / 60.0) as u32;
+    let secs = seconds % 60.0;
+    format!("{mins:02}:{secs:05.2}")
 }
