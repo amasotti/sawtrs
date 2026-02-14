@@ -1,4 +1,5 @@
 mod downloader;
+mod transcriber;
 
 use clap::{Parser, Subcommand};
 
@@ -79,10 +80,13 @@ fn main() {
             }
         }
         Command::Transcribe { file, language } => {
-            println!(
-                "transcribe: not implemented (file={file}, language={})",
-                language.as_deref().unwrap_or("auto")
-            );
+            match transcriber::transcribe(&file, language.as_deref(), None) {
+                Ok(segments) => {
+                    println!("{}", transcriber::format_table(&segments));
+                    println!("{} segment(s)", segments.len());
+                }
+                Err(e) => eprintln!("error: {e}"),
+            }
         }
         Command::Search { query, n, video_id } => {
             println!(
