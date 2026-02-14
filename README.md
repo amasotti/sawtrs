@@ -6,11 +6,12 @@ and allows semantic search and export.
 This is a Rust port of [sawtpy](https://github.com/amasotti/sawtpy), originally written in Python.
 Both are small learning projects for me, to interact with embeddings and transcription models without relying on external APIs.
 
-## Prerequisites
+## Prerequisites (local tools)
 
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — must be installed and available on `PATH`
 - [FFmpeg](https://ffmpeg.org) — must be installed and available on `PATH`
-- A [whisper.cpp ggml model](https://huggingface.co/ggerganov/whisper.cpp/tree/main) — place it in `models/` (defaults to `models/ggml-large-v3.bin`)
+- A [whisper.cpp ggml model](https://huggingface.co/ggerganov/whisper.cpp/tree/main) — place it in `models/` (defaults to `models/whisper-large-v3-turbo.bin`)
+- [Ollama](https://ollama.com) — must be running (`ollama serve`), with the embedding model pulled: `ollama pull nomic-embed-text`
 
 ## Pipeline
 
@@ -53,8 +54,9 @@ The CLI binary is the composition root — modules never import each other.
 ### Vector Store
 
 - Stores transcript segments with embeddings for semantic search.
-- Uses sentence-transformer embeddings (`paraphrase-multilingual-MiniLM-L12-v2`).
-- Segment IDs are deterministic (`{video_id}_{index}`) so re-ingestion is idempotent (upsert).
+- Uses `nomic-embed-text` embeddings (768 dimensions) via Ollama (needs to be available locally).
+- Vector index stored with usearch (HNSW), metadata in a sidecar JSON file.
+- Segment IDs are deterministic (`{video_id}_{index}` → FNV-1a hash) so re-ingestion is idempotent (upsert).
 - Operations: `store_transcript`, `search` (with optional video_id filter), `get_segments` (all segments for a video
   sorted by start time), `get_video_ids`, `delete_video`.
 
@@ -64,10 +66,3 @@ The CLI binary is the composition root — modules never import each other.
 - Prints a formatted table to the console.
 - Writes a CSV file with columns: `start, end, text`.
 - Exits with error if the video has no stored transcript.
-
-## Design Constraints
-
-- Modules are independent — no cross-imports between them.
-- The CLI binary is the sole composition root.
-- macOS is the primary target (Metal/MPS detection present but CPU fallback).
-- External dependencies: yt-dlp and FFmpeg must be installed on the host.
