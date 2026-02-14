@@ -1,5 +1,5 @@
 # Sawtrs
-[![CI](https://github.com/amasotti/sawtrs/actions/workflows/ci.yml/badge.svg)](https://github.com/amasotti/sawtrs/actions/workflows/ci.yml)
+[![CI](https://github.com/amasotti/sawtrs/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/amasotti/sawtrs/actions/workflows/ci.yml)
 
 S2T (sawt as in arabic صوت, "voice") is a local CLI tool that downloads YouTube audio, transcribes it, stores transcript segments in a vector database,
 and allows semantic search and export.
