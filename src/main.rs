@@ -1,3 +1,5 @@
+mod downloader;
+
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -71,7 +73,10 @@ fn main() {
 
     match cli.command {
         Command::Download { url, output } => {
-            println!("download: not implemented (url={url}, output={output})");
+            match downloader::download(&url, &output) {
+                Ok(path) => println!("downloaded: {}", path.display()),
+                Err(e) => eprintln!("error: {e}"),
+            }
         }
         Command::Transcribe { file, language } => {
             println!(
