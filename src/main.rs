@@ -10,7 +10,7 @@ use clap::{Parser, Subcommand};
 const STORE_DIR: &str = "store_data";
 
 #[derive(Parser)]
-#[command(name = "sawt", about = "Download, transcribe, search and export YouTube audio")]
+#[command(name = "sawtrs", about = "Download, transcribe, search and export YouTube audio")]
 struct Cli {
     /// debug logging
     #[arg(short, long, global = true)]
@@ -29,6 +29,12 @@ enum Command {
         /// Output directory
         #[arg(short, long, default_value = "downloads")]
         output: String,
+        /// Clip start time in seconds (e.g. 30 or 90.5)
+        #[arg(long)]
+        start: Option<f64>,
+        /// Clip end time in seconds (e.g. 120 or 300.0)
+        #[arg(long)]
+        end: Option<f64>,
     },
 
     /// Transcribe a WAV file
@@ -79,8 +85,16 @@ fn main() {
     }
 
     match cli.command {
-        Command::Download { url, output } => {
-            match downloader::download(&url, &output) {
+        Command::Download { url, output, start, end } => {
+            let clip = match (start, end) {
+                (Some(s), Some(e)) => Some((s, e)),
+                (Some(_), None) | (None, Some(_)) => {
+                    eprintln!("error: --start and --end must both be provided");
+                    return;
+                }
+                (None, None) => None,
+            };
+            match downloader::download(&url, &output, clip) {
                 Ok(path) => println!("downloaded: {}", path.display()),
                 Err(e) => eprintln!("error: {e}"),
             }
@@ -156,7 +170,7 @@ fn main() {
         Command::Pipeline { url, language } => {
             // Step 1: Download
             eprintln!("[1/3] downloading audio...");
-            let wav_path = match downloader::download(&url, "downloads") {
+            let wav_path = match downloader::download(&url, "downloads", None) {
                 Ok(path) => {
                     eprintln!("       saved to {}", path.display());
                     path

@@ -65,9 +65,19 @@ fn check_dependency(name: &str) -> Result<(), DownloadError> {
     }
 }
 
+fn secs_to_hms(secs: f64) -> String {
+    let total = secs as u64;
+    let h = total / 3600;
+    let m = (total % 3600) / 60;
+    let s = total % 60;
+    format!("{h:02}:{m:02}:{s:02}")
+}
+
 /// Download audio from a YouTube URL or video ID as WAV.
+///
+/// `clip` — optional `(start_secs, end_secs)` to download only that range.
 /// Returns the path to the downloaded file.
-pub fn download(url: &str, output_dir: &str) -> Result<PathBuf, DownloadError> {
+pub fn download(url: &str, output_dir: &str, clip: Option<(f64, f64)>) -> Result<PathBuf, DownloadError> {
     check_dependency("yt-dlp")?;
     check_dependency("ffmpeg")?;
 
@@ -77,23 +87,35 @@ pub fn download(url: &str, output_dir: &str) -> Result<PathBuf, DownloadError> {
 
     fs::create_dir_all(out_path)?;
 
-    let output_template = out_path.join(format!("{video_id}.%(ext)s"));
-    let wav_path = out_path.join(format!("{video_id}.wav"));
+    let stem = match clip {
+        Some((start, end)) => format!("{video_id}_{start}_{end}"),
+        None => video_id.clone(),
+    };
+
+    let output_template = out_path.join(format!("{stem}.%(ext)s"));
+    let wav_path = out_path.join(format!("{stem}.wav"));
 
     // yt-dlp: download and convert to wav via ffmpeg postprocessor,
     // forcing 16kHz mono (required by whisper.cpp)
-    let output = Command::new("yt-dlp")
-        .args([
-            "--extract-audio",
-            "--audio-format",
-            "wav",
-            "--postprocessor-args",
-            "ffmpeg:-ar 16000 -ac 1",
-            "--output",
-        ])
+    let mut cmd = Command::new("yt-dlp");
+    cmd.args([
+        "--extract-audio",
+        "--audio-format",
+        "wav",
+        "--postprocessor-args",
+        "ffmpeg:-ar 16000 -ac 1",
+    ]);
+
+    if let Some((start, end)) = clip {
+        let section = format!("*{}-{}", secs_to_hms(start), secs_to_hms(end));
+        cmd.args(["--download-sections", &section]);
+    }
+
+    cmd.arg("--output")
         .arg(output_template.to_str().unwrap_or_default())
-        .arg(&full_url)
-        .output()?;
+        .arg(&full_url);
+
+    let output = cmd.output()?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

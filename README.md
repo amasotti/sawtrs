@@ -27,15 +27,115 @@ YouTube URL/ID → download audio (WAV) → transcribe (Whisper) → store segme
 
 ## CLI Interface
 
+Global flag: `-v` / `--verbose` — enable debug logging.
+
+### `sawtrs download`
+
+Download audio from YouTube as a 16 kHz mono WAV.
+
 ```
-sawt download <url> [-o dir]              # Download audio from YouTube
-sawt transcribe <file> [--language XX]    # Transcribe a WAV file, display table
-sawt search "query" [-n N] [--video-id]   # Semantic search over stored transcripts
-sawt export <video-id> [-o file.csv]      # Export stored transcript as table + CSV
-sawt pipeline <url> [--language XX]       # Full: download → transcribe → store
+sawtrs download <URL> [OPTIONS]
+
+Arguments:
+  <URL>              YouTube URL or bare video ID
+
+Options:
+  -o, --output <DIR>   Output directory [default: downloads]
+      --start <SECS>   Clip start time in seconds (requires --end)
+      --end <SECS>     Clip end time in seconds (requires --start)
 ```
 
-Global flag: `-v` enables debug logging.
+Examples:
+```bash
+sawtrs download https://youtube.com/watch?v=ABC123
+sawtrs download ABC123 -o /tmp/audio
+sawtrs download https://youtube.com/watch?v=ABC123 --start 90 --end 240
+```
+
+Clips save as `{video_id}_{start}_{end}.wav` so multiple clips from the same video don't collide.
+`--start` and `--end` must be provided together.
+
+### `sawtrs transcribe`
+
+Transcribe a WAV file with Whisper and print a segment table.
+
+```
+sawtrs transcribe <FILE> [OPTIONS]
+
+Arguments:
+  <FILE>             Path to WAV file
+
+Options:
+      --language <LANG>   Language code, e.g. en, it, ar (omit for auto-detection)
+```
+
+Examples:
+```bash
+sawtrs transcribe downloads/ABC123.wav
+sawtrs transcribe downloads/ABC123.wav --language en
+```
+
+### `sawtrs search`
+
+Semantic search over all stored transcript segments.
+
+```
+sawtrs search <QUERY> [OPTIONS]
+
+Arguments:
+  <QUERY>            Search query (natural language)
+
+Options:
+  -n <N>              Number of results [default: 5]
+      --video-id <ID>  Restrict search to a single video
+```
+
+Examples:
+```bash
+sawtrs search "climate change policy"
+sawtrs search "climate change" -n 10
+sawtrs search "climate change" --video-id ABC123
+```
+
+### `sawtrs export`
+
+Print all stored segments for a video and optionally write a CSV.
+
+```
+sawtrs export <VIDEO_ID> [OPTIONS]
+
+Arguments:
+  <VIDEO_ID>         Video ID to export
+
+Options:
+  -o, --output <FILE>   Write CSV to this path (columns: start, end, text)
+```
+
+Examples:
+```bash
+sawtrs export ABC123
+sawtrs export ABC123 -o transcript.csv
+```
+
+### `sawtrs pipeline`
+
+Full pipeline: download → transcribe → store in one step.
+
+```
+sawtrs pipeline <URL> [OPTIONS]
+
+Arguments:
+  <URL>              YouTube URL or bare video ID
+
+Options:
+      --language <LANG>   Language code for transcription (omit for auto-detection)
+```
+
+Examples:
+```bash
+sawtrs pipeline https://youtube.com/watch?v=ABC123
+sawtrs pipeline ABC123 --language ar
+```
 
 ## Modules
 
